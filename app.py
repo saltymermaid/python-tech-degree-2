@@ -1,6 +1,7 @@
 import copy
 import constants
-import pdb
+
+DISPLAY_WIDTH = 36
 
 def clean_data():
     """Import a copy and clean the data"""
@@ -35,42 +36,44 @@ def convert_guardians(guardians_str):
     return guardians
 
 
-def pick_smallest_team(teams):
+def pick_best_team(teams, experienced, max_players_per_team):
     """Pick one of the smallest teams"""
-    smallest_size = min(team['size'] for team in teams)
-    smallest_team = [team for team in teams if team['size'] == smallest_size][0]
+    # exclude teams that are full
+    candidate_teams = [team for team in teams if team['size'] < max_players_per_team]
+    # find the smallest team with the right experience
+    if experienced:
+        smallest_size = min(team['num_experienced'] for team in candidate_teams)
+        smallest_team = [team for team in candidate_teams if team['num_experienced'] == smallest_size][0]
+    else:
+        smallest_size = min(team['num_inexperienced'] for team in candidate_teams)
+        smallest_team = [team for team in candidate_teams if team['num_inexperienced'] == smallest_size][0]
     return smallest_team
 
 
-def balance_teams(team_names, players):
+def create_and_balance_teams(team_names, players):
     """Assign players to teams evenly"""
-    num_players_per_team = len(players) / len(team_names)
-    teams = [{'name': name, 'size': 0, 'players': []} for name in team_names]
+    teams = [{'name': name, 'size': 0, 'num_experienced': 0, 'num_inexperienced': 0, 'players': []} for name in team_names]
+    max_players_per_team = len(players) / len(teams)
     for player in players:
-        selected_team = pick_smallest_team(teams)
+        experienced = player['experience']
+        selected_team = pick_best_team(teams, experienced, max_players_per_team)
         selected_team['players'].append(player)
         selected_team['size'] += 1
+        # increment the experienced or inexperienced count
+        if experienced:
+            selected_team['num_experienced'] += 1
+        else:
+            selected_team['num_inexperienced'] += 1
     return teams
 
 
-def print_team_stats(team):
-    """Print the team stats"""
-    print()
-    team_head = "Team " + team['name'] + " Stats"
-    print("-" * len(team_head))
-    print(team_head)
-    print("-" * len(team_head))
-    print(f"Total players: {team['size']}")
-    print(f"Average height: {avg_height(team)} inches\n")
-    print("Players on Team:")
-    players_list = [player['name'] for player in team['players']]
-    players_str = ", ".join(players_list)
-    print(players_str)
-    print()
-    print("Guardians:")
-    guardians_list = [guardian for player in team['players'] for guardian in player['guardians']]
-    guardians_str = ", ".join(guardians_list)
-    print(guardians_str)
+def player_display_name(player):
+    """Display the player name with (exp) if they are experienced"""
+    player_exp = player['experience']
+    if player_exp == True:
+        return player['name'] + " (exp)"
+    else:
+        return player['name']
 
 
 def avg_height(team):
@@ -84,21 +87,61 @@ def avg_height(team):
 def print_header():
     """Print the header"""
     print()
-    print("*" * 30)
-    print("BASKETBALL TEAM STATS TOOL\n")
+    print("*" * DISPLAY_WIDTH)
+    print("* " + "BASKETBALL TEAM STATS TOOL".center(DISPLAY_WIDTH - 4, ' ') + " *")
 
 
 def print_menu():
     """Print the menu"""
+    print("*" + ' ' * (DISPLAY_WIDTH - 2) + "*")
+    print("* " + " MENU ".center(DISPLAY_WIDTH - 4, '-') + " *")
+    print("*" + ' ' * (DISPLAY_WIDTH - 2) + "*")
+    print("* (S) Display Team Stats" + ' ' * (DISPLAY_WIDTH - 25) + '*')
+    print("* (X) Exit" + ' ' * (DISPLAY_WIDTH - 11) + '*')
+    print("*" * DISPLAY_WIDTH)
     print()
-    print("---- MENU ----\n")
-    print("A) Display Team Stats")
-    print("B) Quit\n")
+
+
+def print_team_choice_menu(teams):
+    print()
+    print("*" * 36)
+    print("* " + "DISPLAY STATS".center(DISPLAY_WIDTH - 4, ' ') + " *")
+    print("*" + ' ' * (DISPLAY_WIDTH - 2) + "*")
+    print("* " + " TEAMS ".center(DISPLAY_WIDTH - 4, '-') + " *")
+    print("*" + ' ' * (DISPLAY_WIDTH - 2) + "*")
+    for index, team in enumerate(teams, 1):
+        team_name_prompt = "(" + str(index) + ") " + team['name']
+        print("* " + team_name_prompt + ' ' * (DISPLAY_WIDTH - len(team_name_prompt) - 3) + "*")
+    print("*" + ' ' * (DISPLAY_WIDTH - 2) + "*")
+    print("*" * 36)
+    print()
+
+
+def print_team_stats(team):
+    """Print the team stats"""
+    print()
+    team_head = "Team " + team['name'] + " Stats"
+    print("-" * DISPLAY_WIDTH)
+    print(team_head.center(DISPLAY_WIDTH, ' '))
+    print("-" * DISPLAY_WIDTH)
+    print(f"Total players:   {team['size']}")
+    print(f"  Experienced:   {team['num_experienced']}")
+    print(f"  Inexperienced: {team['num_inexperienced']}")
+    print(f"Average Height:  {avg_height(team)} inches")
+    players_list = [player_display_name(player) for player in team['players']]
+    players_str = ", ".join(players_list)
+    print(f"Players on Team: {players_str}")
+    guardians_list = [guardian for player in team['players'] for guardian in player['guardians']]
+    guardians_str = ", ".join(guardians_list)
+    print(f"Guardians:       {guardians_str}")
+    print("-" * DISPLAY_WIDTH)
+    print()
+    print("-" * DISPLAY_WIDTH)
 
 
 def choose_team(teams):
-    for index, team in enumerate(teams, 1):
-        print(f"{index}) Display Team {team['name']} Stats")
+    """Get team choice from user and validate"""
+    print_team_choice_menu(teams)
     choice = input("Pick a team > ")
     try:
         choice = int(choice)
@@ -117,20 +160,20 @@ def menu(teams):
     while player_stats:
         print_menu()
         user_choice = input("Enter an option > ")
-        if user_choice.upper() == 'A':
+        if user_choice.upper() == 'S':
             selected_team = choose_team(teams)
             print_team_stats(selected_team)
             print()
-            print("*" * 30)
-        elif user_choice.upper() == 'B':
+        elif user_choice.upper() == 'X':
             player_stats = False
         else:
             print("Please enter a valid option")
+        print("*" * DISPLAY_WIDTH)
 
 
 if __name__ == "__main__":
     players = clean_data()
     team_names = copy.deepcopy(constants.TEAMS)
-    assigned_teams = balance_teams(team_names, players)
+    assigned_teams = create_and_balance_teams(team_names, players)
     print_header()
     menu(assigned_teams)
